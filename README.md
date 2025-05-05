@@ -6,7 +6,7 @@ https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE287495
 
 ---
 
-> **Note:** this RMarkdown (`single-cell_altas_paper_code.Rmd`) begins **after** the upstream preprocessing steps (filtering, QC, doublet removal and dataset refinement) have already been completed. It covers downstream integration, clustering, annotation, DE testing and visualization.
+> **Note:** this RMarkdown (`single-cell_altas_paper_code.Rmd`) begins **after** the upstream preprocessing steps (filtering, QC, doublet removal and dataset refinement) have already been completed. It covers downstream integration, clustering, annotation, DE testing, visualization and downstream irGSEA and trajectory analyses.
 
 ### Outline of `single-cell_altas_paper_code.Rmd`
 
