@@ -8,13 +8,13 @@ output:
       toc: TRUE
 ---
 
-## Set up Workspace
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE)
 ```
 
-### Load packages
+## Set up Workspace
 ```{r workspace, include = FALSE}
+#Packages
 library(Seurat)
 library(kableExtra)
 library(tidyr)
@@ -39,16 +39,20 @@ library(biomaRt)
 library(magrittr)
 library(EnhancedVolcano)
 set.seed(12345)
+
+# Source files for functions
+source("/Users/alexanderfoote/dev/scRNAseq_toolbox.R")
+source("/Users/alexanderfoote/dev/package_install.R")
 ```
 
-### Import filtered/refined rds files
+### Import filtered and refined rds files post-QC
 ```{r Import}
 saline1 <- readRDS("/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds/saline1.std_pipeline_singlets_refined_mt15.rds")
 saline2 <- readRDS("/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds/saline2.std_pipeline_singlets_refined_mt15.rds")
 ```
 
 ### Check and add metadata
-```{r select_features}
+```{r concatenate}
 saline1$SampleName <- "Control1"
 saline2$SampleName <- "Control2"
 saline1$Condition <- "Control"
@@ -57,10 +61,9 @@ saline2$Condition <- "Control"
 saline1
 saline1@commands # This will display all manipulations to the object
 saline1@meta.data # This will display all categorical data in our object
-
 saline2
-saline2@commands # This will display all manipulations to the object
-saline2@meta.data # This will display all categorical data in our object
+saline2@commands
+saline2@meta.data
 
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_Violinplot_QCy.tiff",units="in", width=14, height=7, res=300)
@@ -68,19 +71,22 @@ VlnPlot(saline2, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), pt.si
 dev.off()
 ```
 
-## Identify integration anchors
+## Integration w/ CCA method
 
 The integration anchors are pairs of cells that are mutual nearest neighbors on the shared low-dimensional representation. These may be calculated either for each Seurat object relative to a reference object, or pairwise between all objects if no reference is provided.
 ```{r FindIntegrationAnchors & IntegrateData}
+# Find Integration Anchors & Integrate Data
 anchors_cca <- FindIntegrationAnchors(object.list = list(saline1, saline2), reduction = "cca")
 experiment.salineonly.integrated <- IntegrateData(anchorset = anchors_cca)
 experiment.salineonly.integrated$SampleName <- factor(experiment.salineonly.integrated$SampleName, levels=c("Saline1", "Saline2"))
-#Normalize to cell numbers
+#Normalize to Cell Numbers
 table (Idents(experiment.salineonly.integrated),experiment.salineonly.integrated@meta.data$orig.ident)
 ```
 
-The new experiment.salineonly.integrated object has two assays: RNA and integrated. The RNA assay contains the normalized, scaled data from the individual experiment.split objects merged into a single table, while the data in the integrated assay has been scaled in such a way that it is no longer appropriate to use this assay for differential expression. The authors recommend using the integrated assay for clustering and visualization (UMAP plots). After integration, the control and IAV cells are more co-localized on the biplot.
-```{r integrated PCA & umap}
+### Visualize object, inspect cell compartments
+
+The new 'experiment.salineonly.integrated' object has two assays: RNA and integrated. The RNA assay contains the normalized, scaled data from the individual experiment.split objects merged into a single table, while the data in the integrated assay has been scaled in such a way that it is no longer appropriate to use this assay for differential expression. The authors recommend using the integrated assay for clustering and visualization (UMAP plots). After integration, the 2 control batches are more co-localized on the biplot.
+```{r umap}
 DefaultAssay(experiment.salineonly.integrated) <- "integrated"
 experiment.salineonly.integrated <- ScaleData(experiment.salineonly.integrated)
 experiment.salineonly.integrated <- RunPCA(experiment.salineonly.integrated)
@@ -107,7 +113,7 @@ VlnPlot(experiment.salineonly.integrated, features = c("Epcam","Col1a2","Ptprc",
 FeaturePlot(experiment.salineonly.integrated, features = c("Epcam","Tg","Foxe1","Folr1"), order=TRUE,pt.size=0.5) 
 ```
 
-### 'FindAllMarkers' for integrated object/save
+### `FindAllMarkers` for integrated object/save
 ```{r}
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/csv')
 name <- "experiment.salineonly.integrated_rpca_refine"
@@ -118,7 +124,7 @@ setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds')
 saveRDS(experiment.salineonly.integrated, file = "experiment.salineonly.integrated_rpca_refine_12182023.rds")
 ```
 
-## Dataset Refinement
+## Dataset refinement
 ```{r}
 ## Clusters that were positive for Epcam
 scRNA_epi_saline <- subset(experiment.salineonly.integrated, idents = c(1,2,4,5,7,14)) 
@@ -232,7 +238,7 @@ DimPlot(scRNA_epi_saline, reduction = "umap", group.by = "Phase", shuffle = TRUE
   scale_color_viridis_d()
 ```
 
-### 'FindAllMarkers' for "refined" integrated object/save
+### `FindAllMarkers` for "refined" integrated object/save
 ```{r}
 DefaultAssay(scRNA_epi_saline) <- "RNA"
 Idents(scRNA_epi_saline) <- "seurat_clusters"
@@ -304,7 +310,7 @@ DimPlot(scRNA_epi_saline, reduction = "umap", group.by = "Phase", shuffle = TRUE
   scale_color_viridis_d()
 ```
 
-### 'FindAllMarkers' for "refined" integrated object/save
+### `FindAllMarkers` for "refined" integrated object/save
 ```{r}
 DefaultAssay(scRNA_epi_saline) <- "RNA"
 Idents(scRNA_epi_saline) <- "seurat_clusters"
@@ -340,7 +346,7 @@ saveRDS(scRNA_epi_saline, file = "scRNA_epi_saline_rpca_refined_2232024.rds")
 ## CellType Annotation
 ```{r UMAP annotated clusters}
 scRNA_epi_saline <- readRDS("/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds/scRNA_epi_saline_rpca_refined_2232024.rds")
-#Assign annotations for larynx vs tracheal regions
+#Assign annotations per tissue regions
 DefaultAssay(scRNA_epi_saline) <- "RNA"
 Idents(scRNA_epi_saline) <- "seurat_clusters"
 scRNA_epi_saline <- RenameIdents(scRNA_epi_saline, 
@@ -371,15 +377,13 @@ plot2 <- DimPlot(scRNA_epi_saline,reduction = "umap", pt.size=.1) + NoLegend()
 LabelClusters(plot2, id="ident", size=5,repel=T, box.padding=.5)
 plot(plot2)
 dev.off()
-#Assign cluster annotation for all cell types
+#Assign cluster annotations for regions
 scRNA_epi_saline$Region <- Idents(scRNA_epi_saline)
 
-#Assign annotations to seurat_clusters
+#Assign annotations per cell type
 DefaultAssay(scRNA_epi_saline) <- "RNA"
 Idents(scRNA_epi_saline) <- "seurat_clusters"
 scRNA_epi_saline <- RenameIdents(scRNA_epi_saline, 
-                # '0' =  'Basal-trachea',
-                 # '1' =  'Basal-trachea',
                   '0' =  'Basal-v.trachea',
                   '1' =  'Basal-d.trachea',
                   '12' =  'Basal-larynx',
@@ -400,14 +404,13 @@ scRNA_epi_saline <- RenameIdents(scRNA_epi_saline,
                   '18' =  'Tuft/NE/Ionocyte',
                   '15' = 'Ciliated')
 
-name <- "scRNA_epi_labels"
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 pdf(paste(name,"_UMAPplot_label_per_celltype_IAVseq.pdf",sep=""))
 plot1 <- DimPlot(scRNA_epi_saline,reduction = "umap", pt.size=.1) + NoLegend()
 LabelClusters(plot1, id="ident", size=5,repel=T, box.padding=.5)
 plot(plot1)
 dev.off()
-#Assign cluster annotation for all cell types
+#Assign cluster annotations for cell types
 scRNA_epi_saline$CellType <- Idents(scRNA_epi_saline)
 
 LabelClusters(plot1, id="ident", size=5,repel=T, box.padding=.5)
@@ -433,27 +436,24 @@ scRNA_epi_saline$CellType <- factor(scRNA_epi_saline$CellType,levels=c('Basal-d.
 
 scRNA_epi_saline$CellType <- factor(scRNA_epi_saline$CellType,levels=c('Basal-trachea','Basal-larynx','Parabasal-larynx','Basal-myoepithelial','Club-proximal','Club-mid','Club-distal',"Serous-duct",'Serous-acini','Mucous-1-SMG','Mucous-2-SMG','Mucous-cuboidal-larynx','Mucous-squamous-larynx','Suprabasal-larynx',"Neuroendocrine",'Tuft','Ciliated'))
 
-
 #Remove 'Tuft/NE/Ionocyte' cluster
 scRNA_epi_saline <- subset(scRNA_epi_saline,idents='Tuft/NE/Ionocyte', invert = TRUE)
 DimPlot(scRNA_epi_saline,reduction = "umap",label = TRUE,pt.size=1) 
 #Reassign cluster annotation
 scRNA_epi_saline$CellType <- Idents(scRNA_epi_saline)
 
-name <- "scRNA_epi_labels_custom-annotate_celltype"
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("_UMAPplot_label_per_cell_IAVseq_custom-annotate.tiff",units="in", width=10, height=8, res=300)
 DimPlot_scCustom(scRNA_epi_saline,reduction = "umap",label = T,pt.size=.3, DiscretePalette_scCustomize(num_colors = 24, palette = "alphabet"), figure_plot = TRUE, label.size = 4, label.box = T) 
 dev.off()
 
-name <- "scRNA_epi_labels_custom-annotate_VlnPlotQC"
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_labels_custom-annotate_VlnPlotQC.tiff",units="in", width=15, height=8, res=300)
 VlnPlot(scRNA_epi_saline, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, pt.size = 0)
 dev.off()
 ```
 
-### 'FindAllMarkers' on annotated object
+### `FindAllMarkers` on annotated object
 ```{r}
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 #Per Region
@@ -519,7 +519,9 @@ setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds')
 saveRDS(scRNA_epi_saline, file = "scRNA_epi_saline_rpca_refined_annotated_442025.rds")
 ```
 
-### 'MAST' 'FindAllMarkers' stat test
+### 'MAST' `FindAllMarkers` stat test
+
+Model-based Analysis of Single-cell Transcriptomics (MAST) test is a complement to the defualt Wilcoxon rank-sum test. The MAST test is particularly well-suited for single-cell data because it uses a hurdle model to account for both the dropout rate (the probability that a gene is not detected in a cell) and the continuous expression level among cells that do express the gene. This dual modeling makes MAST more stringent and statistically robust compared to the non-parametric Wilcox test, providing greater confidence in the identification of DE markers.
 ```{r}
 #Per CellType
 DefaultAssay(scRNA_epi_saline) <- "RNA"
@@ -552,6 +554,7 @@ write.table(x, file=paste(name,"_Clustermarker.csv",sep=""), append = FALSE, quo
 ```
 
 ## Visualization of scRNA_epi_saline object
+
 ### Dotplot_top marker genes_celltype
 ```{r}
 #Per Cell Type (single top markers)
@@ -597,8 +600,9 @@ DoHeatmap(scRNA_epi_saline, angle = 90,size = 3, group.by = "CellType", features
 dev.off()
 ```
 
-### Highlight subset of cells
+### Highlight subset of cells in FeaturePlot
 ```{r}
+DefaultAssay(scRNA_epi_saline) <- "RNA"
 # Universal Step 1: List all identities and confirm they match the intended clusters
 unique_clusters <- unique(Idents(scRNA_epi_saline))  # Check if this includes the desired identities
 
@@ -642,8 +646,7 @@ VlnPlot(
 )
 dev.off()
 
-# Step 2: Create a named color vector FOR SMG where each identity is explicitly matched to a color
-# Assign grey to unhighlighted clusters by default
+# Step 2: FOR SMG CELLS
 colors_use_SMG <- rep("grey", length(unique_clusters))
 names(colors_use_SMG) <- unique_clusters
 
@@ -659,16 +662,15 @@ setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_UMAP-SMG-highlight.tiff",units="in", width=10, height=10, res=300)
 DimPlot(
   scRNA_epi_saline, 
-  group.by = "CellType",   # Ensure "CellType" is the correct metadata for grouping
+  group.by = "CellType",
   reduction = "umap",
   label = F, 
   pt.size = 1, 
-  cols = colors_use_SMG  # Named vector applies specific colors to specific identities
+  cols = colors_use_SMG  
 )
 dev.off()
 
-# Step 2: Create a named color vector FOR TERMINAL CELLS where each identity is explicitly matched to a color
-# Assign grey to unhighlighted clusters by default
+# Step 2: FOR TERMINAL CELLS
 colors_use_ter <- rep("grey", length(unique_clusters))
 names(colors_use_ter) <- unique_clusters
 
@@ -688,16 +690,15 @@ setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_UMAP-terminal_diversity-highlight.tiff",units="in", width=12, height=10, res=300)
 DimPlot(
   scRNA_epi_saline, 
-  group.by = "CellType",   # Ensure "CellType" is the correct metadata for grouping
+  group.by = "CellType",  
   reduction = "umap",
   label = F, 
   pt.size = 1, 
-  cols = colors_use_ter  # Named vector applies specific colors to specific identities
+  cols = colors_use_ter  
 )
 dev.off()
 
-# Step 2: Create a named color vector FOR LARYNX CELLS where each identity is explicitly matched to a color
-# Assign grey to unhighlighted clusters by default
+# Step 2: FOR LARYNX CELLS
 colors_use_larynx <- rep("grey", length(unique_clusters))
 names(colors_use_larynx) <- unique_clusters
 
@@ -712,11 +713,11 @@ setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_UMAP-larynx-highlight.tiff",units="in", width=13, height=10, res=300)
 DimPlot(
   scRNA_epi_saline, 
-  group.by = "CellType",   # Ensure "CellType" is the correct metadata for grouping
+  group.by = "CellType",  
   reduction = "umap",
   label = F, 
   pt.size = 1, 
-  cols = colors_use_larynx  # Named vector applies specific colors to specific identities
+  cols = colors_use_larynx  
 )
 dev.off()
 
@@ -732,11 +733,13 @@ show_col(colors)
 ```
 
 ### Explore data with advanced visualization
+
+Various plots included in main and supplemental figures of this paper.
 ```{r}
 #Define assay
 DefaultAssay(scRNA_epi_saline) <- "RNA"
 Idents(scRNA_epi_saline) <- "CellType"
-#SMG subpopulations
+#SMG subpopulation markers
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 name <- "SMG_populations"
 tiff("scRNA_epi_UMAP_SMG.tiff",units="in", width=15, height=6, res=300)
@@ -744,7 +747,6 @@ FeaturePlot_scCustom(scRNA_epi_saline,
             features = c("Dmbt1","Acta2","Nkx3-1","Muc5b","Tff2","Lipf","Slc34a2","Bpifb5"), 
             order=TRUE, pt.size=1, colors_use= c("#E4E1E3FF","#F6222EFF"), na_cutoff =.5, num_columns = 4)
 dev.off()
-
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_UMAP_Dmbt1.tiff",units="in", width=7, height=6, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline, 
@@ -786,13 +788,11 @@ FeaturePlot_scCustom(scRNA_epi_saline,
             features = c("Bpifb5"), 
             order=TRUE, pt.size=2, colors_use= c("#E4E1E3FF","#F6222EFF"), na_cutoff =.5)
 dev.off()
-
 tiff("scRNA_epi_UMAP_human_mucous.tiff",units="in", width=7, height=6, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline, 
             features = c("Nkx3-1","Sox9","Bpifb2","Azgp1"), 
             order=TRUE, pt.size=2, colors_use= c("#E4E1E3FF","#F6222EFF"), na_cutoff =.5)
 dev.off()
-
 tiff("scRNA_epi_UMAP_Agr2.tiff",units="in", width=7, height=6, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline, 
             features = c("Agr2"), 
@@ -806,13 +806,11 @@ FeaturePlot_scCustom(scRNA_epi_saline,
             features = c("Igfbp2"), 
             order=TRUE,pt.size=2, colors_use= c("#E4E1E3FF","#F6222EFF"), na_cutoff =1.5)
 dev.off()
-
 tiff("scRNA_epi_UMAP_Tmprss11a.tiff",units="in", width=10, height=7, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline, 
             features = c("Tmprss11a"), 
             order=TRUE,pt.size=2, colors_use= c("#E4E1E3FF","#F6222EFF"), na_cutoff =1.5)
 dev.off()
-
 tiff("scRNA_epi_UMAP_Krt13.tiff",units="in", width=10, height=7, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline, 
             features = c("Krt13"), 
@@ -820,33 +818,34 @@ FeaturePlot_scCustom(scRNA_epi_saline,
 dev.off()
 
 #Regional tissue markers
+#Vlnplot
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
+tiff("scRNA_epi_VlnPlot_Region_markers.tiff",units="in", width=15, height=6, res=300)
+VlnPlot_scCustom(scRNA_epi_saline, features = c("Tmprss11a", "Nkx2-1", "Dmbt1"), colors_use =  c("#F0A0FFFF","#0075DCFF","#993F00FF"), pt.size = 0)
+dev.off()
 tiff("scRNA_epi_UMAP_Tmprss11a.tiff",units="in", width=12, height=12, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline, 
             features = c("Tmprss11a"), 
             order=TRUE,pt.size=2, colors_use= c("#E4E1E3FF","#F6222EFF"), na_cutoff =1.5)
 dev.off()
-
 tiff("scRNA_epi_UMAP_Nkx2-1.tiff",units="in", width=12, height=12, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline, 
             features = c("Nkx2-1"), 
             order=TRUE,pt.size=2, colors_use= c("#E4E1E3FF","#F6222EFF"), na_cutoff =.5)
 dev.off()
-
 tiff("scRNA_epi_UMAP_Dmbt1.tiff",units="in", width=12, height=12, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline, 
             features = c("Dmbt1"), 
             order=TRUE,pt.size=2, colors_use= c("#E4E1E3FF","#F6222EFF"), na_cutoff =2)
 dev.off()
-setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
-
 tiff("scRNA_epi_UMAP_Sox9.tiff",units="in", width=7, height=6, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline, 
             features = c("Sox9"), 
             order=TRUE,pt.size=2, colors_use= c("#E4E1E3FF","#F6222EFF"), na_cutoff =.5)
 dev.off()
 
-#Club markers
+#Club cell markers
+setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_UMAP_Scgb1a1.tiff",units="in", width=7, height=6, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline, 
             features = c("Scgb1a1"), 
@@ -857,32 +856,21 @@ FeaturePlot_scCustom(scRNA_epi_saline,
             features = c("Scgb3a2"), 
             order=TRUE,pt.size=1, colors_use= c("#E4E1E3FF","#F6222EFF"), na_cutoff =4)
 dev.off()
-
 FeaturePlot_scCustom(scRNA_epi_saline, 
             features = c("Il1a","Duoxa2"), 
             order=TRUE,pt.size=1, colors_use= c("#E4E1E3FF","#F6222EFF"),na_cutoff =.5)
-
-setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_dotplot_Agr2_Dmbt1.tiff",units="in", width=6, height=10, res=300)
 DotPlot_scCustom(scRNA_epi_saline, 
             features = c('Agr2',"Dmbt1"), x_lab_rotate = TRUE,
             colors_use= c("#E4E1E3FF","#F6222EFF")) 
 dev.off()
 
-#Keratin markers
+#Comprehensive Keratin markers
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_dotplot_Krt_diversity.tiff",units="in", width=10, height=14, res=300)
 DotPlot_scCustom(scRNA_epi_saline, 
             features = c('Krt1', 'Krt2', 'Krt3', 'Krt4', 'Krt5', 'Krt6a', 'Krt6b', 'Krt6c', 'Krt7', 'Krt8', 'Krt9', 'Krt10', 'Krt12', 'Krt13', 'Krt14', 'Krt15', 'Krt16', 'Krt17', 'Krt18', 'Krt19', 'Krt20', 'Krt21', 'Krt23', 'Krt24', 'Krt25', 'Krt26', 'Krt27', 'Krt28', 'Krt31', 'Krt32', 'Krt33a', 'Krt33b', 'Krt34', 'Krt35', 'Krt36', 'Krt37', 'Krt38', 'Krt39', 'Krt40', 'Krt71', 'Krt72', 'Krt73', 'Krt74', 'Krt75', 'Krt76', 'Krt77', 'Krt78', 'Krt79', 'Krt80', 'Krt81', 'Krt82', 'Krt83', 'Krt84', 'Krt85', 'Krt86', 'Krt87', 'Krt88', 'Krt89', 'Krt90', 'Krt93', 'Krt94', 'Krt95', 'Krt96'), x_lab_rotate = TRUE,
             colors_use= c("#E4E1E3FF","#F6222EFF")) #63 known KRTs
-dev.off()
-
-DefaultAssay(scRNA_epi_saline) <- "RNA"
-Idents(scRNA_epi_saline) <- "Region"
-
-setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
-tiff("scRNA_epi_VlnPlot_Region_markers.tiff",units="in", width=15, height=6, res=300)
-VlnPlot_scCustom(scRNA_epi_saline, features = c("Tmprss11a", "Nkx2-1", "Dmbt1"), colors_use =  c("#F0A0FFFF","#0075DCFF","#993F00FF"), pt.size = 0)
 dev.off()
 ```
 
@@ -925,7 +913,7 @@ labs(title = NULL, subtitle=NULL, x = NULL, y = 'Total Cell Count', caption = NU
   theme(panel.grid = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = 'black'), legend.position="right") 
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 ggsave("Total_epi_cellcount_celltype.tiff", Total_epi_cell_count, width = 8, height = 6)
-VlnPlot_scCustom(scRNA_epi_saline, features = "nCount_RNA", split.by = "Condition", group.by = "CellType", pt.size = 0)
+VlnPlot_scCustom(scRNA_epi_saline, features = "nCount_RNA", group.by = "CellType", pt.size = 0)
 ```
 
 ### Define % of cells that express marker gene
@@ -1034,8 +1022,12 @@ DimPlot(
   cols = colors_use_basal  # Named vector applies specific colors to specific identities
 )
 dev.off()
+```
 
-#Find all markers
+### DE Analysis: Basal populations
+
+### `FindAllMarkers` for basal subpopulations
+```{r}
 DefaultAssay(scRNA_epi_saline_basal) <- "RNA"
 markers.percell <- FindAllMarkers(scRNA_epi_saline_basal, only.pos = TRUE, min.pct = 0.25, thresh.use = 0.25)
 tapply(markers.percell$p_val_adj, markers.percell$cluster, function(x){
@@ -1065,6 +1057,7 @@ write.table(x, file=paste(name,"_Clustermarker.csv",sep=""), append = FALSE, quo
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds')
 saveRDS(scRNA_epi_saline_basal, file = "scRNA_epi_saline_basalonly_annotated_11142024.rds")
 
+#Visualize DotPlot of top markers
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_saline_basalonly_dotplot.tiff",units="in", width=12, height=7, res=300)
 DotPlot_scCustom(scRNA_epi_saline_basal, 
@@ -1072,15 +1065,13 @@ DotPlot_scCustom(scRNA_epi_saline_basal,
             colors_use= c("#E4E1E3FF","#F6222EFF"))
 dev.off()
 
-# Assume 'seurat_object' is your Seurat object and cell types are stored in 'Idents(seurat_object)'
 # Define the desired order of cell types
 desired_order <- c("Basal-myoepithelial","Basal-trachea","Basal-larynx")
-
 # Reorder the identities
 scRNA_epi_saline_basal$ident <- factor(Idents(scRNA_epi_saline_basal), levels = desired_order)
 Idents(scRNA_epi_saline_basal) <- scRNA_epi_saline_basal$ident
 
-# Create the dot plot with the reordered y-axis
+# Create the dot plot with the reordered y-axis on extensive markers
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_saline_basalonly_dotplot_3-way_KEGG.tiff",units="in", width=10, height=7, res=300)
 DotPlot_scCustom(scRNA_epi_saline_basal, 
@@ -1092,11 +1083,7 @@ DotPlot_scCustom(scRNA_epi_saline_basal,
     colors_use = c("#E4E1E3FF", "#F6222EFF"))
 dev.off()
 
-DotPlot_scCustom(scRNA_epi_saline, 
-    features = c("Nkx2-1"), 
-    x_lab_rotate = TRUE, 
-    colors_use = c("#E4E1E3FF", "#F6222EFF"))
-
+# Featureplots of top defining markers
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_UMAP_Aqp5_basalonly.tiff",units="in", width=7, height=7, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline_basal, 
@@ -1114,10 +1101,9 @@ FeaturePlot_scCustom(scRNA_epi_saline_basal,
             order=TRUE,pt.size=2, colors_use= c("#E4E1E3FF","#F6222EFF"), na_cutoff =1)
 dev.off()
 ```
-
-### DE Analysis: Basal populations
+### Set Pairwise Comparisons_basal
 ```{r}
-# Basal cells
+# Basal cell comparisons
 Idents(scRNA_epi_saline_basal) <- "CellType"
 basal.larynx.trachea.de <- FindMarkers(scRNA_epi_saline_basal, ident.1 = "Basal-larynx", ident.2 = "Basal-trachea", verbose = FALSE)
 head(basal.larynx.trachea.de, n = 10)
@@ -1128,19 +1114,33 @@ head(basal.larynx.myo.de, n = 10)
 basal.trachea.myo.de <- FindMarkers(scRNA_epi_saline_basal, ident.1 = "Basal-trachea", ident.2 = "Basal-myoepithelial", verbose = FALSE)
 head(basal.trachea.myo.de, n = 10)
 
+# Save csv
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/csv')
-#Basal cell comparisons
 fwrite(x = basal.larynx.trachea.de, row.names = TRUE, file = "basal.larynx.trachea.de.csv")
 fwrite(x = basal.larynx.myo.de, row.names = TRUE, file = "basal.larynx.myo.de.csv")
 fwrite(x = basal.trachea.myo.de, row.names = TRUE, file = "basal.trachea.myo.de.csv")
+```
+#### Import csv datasets and explore DE
+```{r}
+csv_list_de <- import_all_csvs("/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/csv", recursive = TRUE)
 
-#Basal-ventral-trachea vs Basal-dorsal-trachea
-fwrite(x = Basal_ventral_dorsal_trachea.marker.de, row.names = TRUE, file = "Basal_ventral_dorsal_trachea.marker.de.csv")
+# Accessing individual files, reorder by avg_log2FC descending, then take the first 10 rows
+csv_list_de[["basal.larynx.trachea.de"]] %>%
+  arrange(desc(avg_log2FC)) %>%
+  head(n=100)
+csv_list_de[["basal.larynx.myo.de"]] %>%
+  arrange(desc(avg_log2FC)) %>%
+  head(n=100)
+csv_list_de[["basal.trachea.myo.de"]] %>%
+  arrange(desc(avg_log2FC)) %>%
+  head(n=100)
+```
 
-## Overexpressed terms and Volcano plots
-###Basal larynx vs trachea
+#### Enrichment_VolcanoPlots
+```{r}
+# Basal larynx vs trachea
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
-name <- "basal.trachea.larynx.barplot.de"
+name <- "basal.trachea.larynx.de"
 DEenrichRPlot(scRNA_epi_saline, ident.1 = "Basal-larynx", ident.2 = "Basal-trachea", balanced = FALSE, logfc.threshold = log(2.5), assay = NULL, max.genes = 100, test.use = "wilcox", p.val.cutoff = 0.05, cols = NULL, enrich.database = "GO_Biological_Process_2023", num.pathway = 10, return.gene.list = F)
 dev.off()
 pdf(paste(name,"_KEGG.pdf",sep=""),width=10,height=15)
@@ -1150,9 +1150,7 @@ dev.off()
 EnhancedVolcano(basal.larynx.trachea.de, rownames(basal.larynx.trachea.de),
                 x ="avg_log2FC", y ="p_val_adj", title = 'Basal : Trachea vs Larynx',
                 FCcutoff = 1.32, pCutoff = 0.01, pointSize = 1.0, labSize = 6.0, legendLabSize = 12, legendIconSize = 4.0, drawConnectors = TRUE, widthConnectors = 0.25)
-#print
-setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
-name <- "basal.larynx.trachea.de"
+# print
 pdf(paste(name,"_VolcanoPlot.pdf",sep=""),width=10,height=15)
 EnhancedVolcano(basal.larynx.trachea.de, rownames(basal.larynx.trachea.de),
                 x ="avg_log2FC", y ="p_val_adj", title = 'Basal : Trachea vs Larynx',
@@ -1160,9 +1158,9 @@ EnhancedVolcano(basal.larynx.trachea.de, rownames(basal.larynx.trachea.de),
                 FCcutoff = 1.32, pCutoff = 0.01, pointSize = 1.0, labSize = 8.0, legendLabSize = 14, legendIconSize = 4.0, drawConnectors = TRUE, widthConnectors = 0.25, legendPosition = 'bottom', boxedLabels = TRUE, colAlpha = 4/5)
 dev.off()
 
-###Basal larynx vs myo
+# Basal larynx vs myo
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
-name <- "basal.larynx.myo.barplot.de"
+name <- "basal.larynx.myo.de"
 DEenrichRPlot(scRNA_epi_saline, ident.1 = "Basal-larynx", ident.2 = "Basal-myoepithelial", balanced = FALSE, logfc.threshold = log(2.5), assay = NULL, max.genes = 100, test.use = "wilcox", p.val.cutoff = 0.05, cols = NULL, enrich.database = "GO_Biological_Process_2023", num.pathway = 10, return.gene.list = F)
 dev.off()
 pdf(paste(name,"_KEGG.pdf",sep=""),width=10,height=15)
@@ -1172,9 +1170,7 @@ dev.off()
 EnhancedVolcano(basal.larynx.myo.de, rownames(basal.larynx.myo.de),
                 x ="avg_log2FC", y ="p_val_adj", title = 'Basal : Myoepithelial vs Larynx',
                 FCcutoff = 1.32, pCutoff = 0.01, pointSize = 1.0, labSize = 6.0, legendLabSize = 12, legendIconSize = 4.0, drawConnectors = TRUE, widthConnectors = 0.25)
-#print
-setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
-name <- "basal.larynx.myo.de"
+# print
 pdf(paste(name,"_VolcanoPlot.pdf",sep=""),width=10,height=15)
 EnhancedVolcano(basal.larynx.myo.de, rownames(basal.larynx.myo.de),
                 x ="avg_log2FC", y ="p_val_adj", title = 'Basal : Myoepithelial vs Larynx',
@@ -1182,9 +1178,9 @@ EnhancedVolcano(basal.larynx.myo.de, rownames(basal.larynx.myo.de),
                 FCcutoff = 1.32, pCutoff = 0.01, pointSize = 1.0, labSize = 8.0, legendLabSize = 14, legendIconSize = 4.0, drawConnectors = TRUE, widthConnectors = 0.25, legendPosition = 'bottom', boxedLabels = TRUE, colAlpha = 4/5)
 dev.off()
 
-###Basal trachea vs myo
+# Basal trachea vs myo
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
-name <- "basal.trachea.myo.barplot.de"
+name <- "basal.trachea.myo.de"
 pdf(paste(name,"_GO_biological.pdf",sep=""),width=10,height=15)
 DEenrichRPlot(scRNA_epi_saline, ident.1 = "Basal-trachea", ident.2 = "Basal-myoepithelial", balanced = FALSE, logfc.threshold = log(2.5), assay = NULL, max.genes = 100, test.use = "wilcox", p.val.cutoff = 0.05, cols = NULL, enrich.database = "GO_Biological_Process_2023", num.pathway = 10, return.gene.list = T)
 dev.off()
@@ -1195,9 +1191,7 @@ dev.off()
 EnhancedVolcano(basal.trachea.myo.de, rownames(basal.trachea.myo.de),
                 x ="avg_log2FC", y ="p_val_adj", title = 'Basal : Myoepithelial vs Trachea',
                 FCcutoff = 1.32, pCutoff = 0.01, pointSize = 1.0, labSize = 8.0, legendLabSize = 12, legendIconSize = 4.0, drawConnectors = TRUE, widthConnectors = 0.25)
-#print
-setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
-name <- "basal.trachea.myo.volcano.de"
+# print
 pdf(paste(name,"_VolcanoPlot.pdf",sep=""),width=10,height=15)
 EnhancedVolcano(basal.trachea.myo.de, rownames(basal.trachea.myo.de),
                 x ="avg_log2FC", y ="p_val_adj", title = 'Basal : Myoepithelial vs Trachea',
@@ -1266,7 +1260,12 @@ DimPlot(
   cols = colors_use_club  # Named vector applies specific colors to specific identities
 )
 dev.off()
+```
 
+### DE Analysis: Club populations
+
+### `FindAllMarkers` for basal subpopulations
+```{r}
 #Find all markers
 DefaultAssay(scRNA_epi_saline_club) <- "RNA"
 markers.percell <- FindAllMarkers(scRNA_epi_saline_club, only.pos = TRUE, min.pct = 0.25, thresh.use = 0.25)
@@ -1297,7 +1296,6 @@ write.table(x, file=paste(name,"_Clustermarker.csv",sep=""), append = FALSE, quo
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds')
 saveRDS(scRNA_epi_saline_club, file = "scRNA_epi_saline_clubonly_annotated_11142024.rds")
 
-# Assume 'seurat_object' is your Seurat object and cell types are stored in 'Idents(seurat_object)'
 # Define the desired order of cell types
 desired_order <- c("Club-proximal","Club-mid","Club-distal")
 
@@ -1311,15 +1309,11 @@ DotPlot_scCustom(scRNA_epi_saline_club,
             features = c('Scgb1a1','Scgb3a2',"Scgb3a1","Rps12",'Chrm3',"Eya4","Cadm2","Sema3d","Atp13a5","Slc6a15","Tacr1","Il1rap","Porcn","Hopx","Il18r1","Cldn4","Cav1","B4galt5","Adrb1"), x_lab_rotate = TRUE,
             colors_use= c("#E4E1E3FF","#F6222EFF"))
 dev.off()
-
-setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_UMAP_featurepot_clubonly.tiff",units="in", width=7, height=7, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline_club, 
             features = c("Scgb1a1","Scgb3a2","Scgb3a1","Cadm2"), 
             order=TRUE,pt.size=1, colors_use= c("#E4E1E3FF","#F6222EFF"), na_cutoff =1)
 dev.off()
-
-setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
 tiff("scRNA_epi_UMAP_featurepot_clubonly.Scgb1a1.tiff",units="in", width=7, height=7, res=300)
 FeaturePlot_scCustom(scRNA_epi_saline_club, 
             features = c("Scgb1a1"), 
@@ -1342,17 +1336,30 @@ FeaturePlot_scCustom(scRNA_epi_saline_club,
 dev.off()
 ```
 
-### DE Analysis: Club populations
+### Set Pairwise Comparisons_basal
 ```{r}
-# Club-prox versus Club-distal
+# Club-prox vs Club-distal
 Club_proximal_distal.marker.de <- FindMarkers(scRNA_epi_saline, ident.1 = "Club-proximal", ident.2 = "Club-distal", verbose = FALSE,   only.pos = FALSE)
 head(Club_proximal_distal.marker.de, n = 10)
 
-#Club-proximal vs Club-distal
+# Save csv
+setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/csv')
 fwrite(x = Club_proximal_distal.marker.de, row.names = TRUE, file = "Club_proximal_distal.marker.de.csv")
+```
 
+#### Import csv datasets and explore DE
+```{r}
+# Reorder by avg_log2FC descending, then take the first 10 rows
+csv_list_de[["Club_proximal_distal.marker.de"]] %>%
+  arrange(desc(avg_log2FC)) %>%
+  head(n=50)
+```
+
+
+#### Enrichment_VolcanoPlots
+```{r}
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
-name <- "club-prox.club-distal.barplot.de"
+name <- "club-prox.club-distal.de"
 DEenrichRPlot(scRNA_epi_saline, ident.1 = "Club-proximal",  ident.2 = "Club-distal", balanced = TRUE, logfc.threshold = log(2.5), assay = NULL, max.genes = 100, test.use = "wilcox", p.val.cutoff = 0.05, cols = NULL, enrich.database = "GO_Biological_Process_2023", num.pathway = 10, return.gene.list = F)
 DEenrichRPlot(scRNA_epi_saline, ident.1 = "Club-proximal",  ident.2 = "Club-distal", balanced = TRUE, logfc.threshold = log(2.5), assay = NULL, max.genes = 100, test.use = "wilcox", p.val.cutoff = 0.05, cols = NULL, enrich.database = "KEGG_2021_Human", num.pathway = 10, return.gene.list = F)
 
@@ -1360,8 +1367,6 @@ EnhancedVolcano(Club_proximal_distal.marker.de, rownames(Club_proximal_distal.ma
                 x ="avg_log2FC", y ="p_val_adj", title = 'Club-distal versus Club-proximal',
                 FCcutoff = 1, pCutoff = 0.05, pointSize = 3.0, labSize = 5.0, legendLabSize = 12, legendIconSize = 4.0, drawConnectors = TRUE, widthConnectors = 0.25)
 #print
-setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
-name <- "club-prox.club-distal.barplot.de"
 pdf(paste(name,"_VolcanoPlot.pdf",sep=""),width=12,height=10)
 EnhancedVolcano(Club_proximal_distal.marker.de, rownames(Club_proximal_distal.marker.de), 
                 x ="avg_log2FC", y ="p_val_adj", title = 'Club-distal versus Club-proximal',
@@ -1370,40 +1375,341 @@ EnhancedVolcano(Club_proximal_distal.marker.de, rownames(Club_proximal_distal.ma
 dev.off()
 ```
 
-
-```{r Basal-ventral-trachea vs Basal-dorsal-trachea}
-setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
-name <- "Basal-ventral-trachea.vs.Basal-dorsal-trachea.barplot.de"
-DEenrichRPlot(scRNA_epi_saline, ident.1 = "Club1",  ident.2 = "Club2", balanced = FALSE, logfc.threshold = log(2.5), assay = NULL, max.genes = 100, test.use = "wilcox", p.val.cutoff = 0.05, cols = NULL, enrich.database = "GO_Biological_Process_2023", num.pathway = 20, return.gene.list = F)
-DEenrichRPlot(scRNA_epi_saline, ident.1 = "Club1",  ident.2 = "Club2", balanced = FALSE, logfc.threshold = log(2.5), assay = NULL, max.genes = 100, test.use = "wilcox", p.val.cutoff = 0.05, cols = NULL, enrich.database = "KEGG_2021_Human", num.pathway = 25, return.gene.list = F)
-
-EnhancedVolcano(Club1.marker.de, rownames(Club1.marker.de), 
-                x ="avg_log2FC", y ="p_val_adj", title = 'Basal-ventral-trachea.vs.Basal-dorsal-trachea',
-                FCcutoff = 1.32, pCutoff = 0.01, pointSize = 3.0, labSize = 5.0, legendLabSize = 12, legendIconSize = 4.0, drawConnectors = TRUE, widthConnectors = 0.25)
-#print
-setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
-name <- "club1.club2.de"
-pdf(paste(name,"_VolcanoPlot.pdf",sep=""),width=10,height=12)
-EnhancedVolcano(Club1.marker.de, rownames(Club1.marker.de), 
-                x ="avg_log2FC", y ="p_val_adj", title = 'Basal-ventral-trachea.vs.Basal-dorsal-trachea',
-                 #selectLab = c('Dcpp3','Lipf','Apoe',"Dcn","Slc22a4","Ica1","Cyb561d1","Slc2a13","Arnt","Gatad2b","Nexmif","Cpm","Eva1a","Git2","Scel","Prkd1","Mical2","Crtc3","Capn13","Kctd8","Spopl","Pcsk7","Mbp","Shb"),
-                FCcutoff = 1.32, pCutoff = 0.01, pointSize = 1.0, labSize = 6.0, legendLabSize = 14, legendIconSize = 4.0, drawConnectors = TRUE, widthConnectors = 0.25,  boxedLabels = TRUE,  legendPosition = 'bottom', colAlpha = 4/5)
-dev.off()
-```
-
-## Save/load Seurat object
+## Save Seurat objects
 ```{r}
 #Updated on April 4th, 2025
 setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds')
 saveRDS(scRNA_epi_saline, file = "scRNA_epi_saline_rpca_refined_annotated_442025.rds")
-scRNA_epi_saline <- readRDS("/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds/scRNA_epi_saline_rpca_refined_annotated_442025.rds")
-scRNA_epi_saline_basal <- readRDS("/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds/scRNA_epi_saline_rpca_refined_annotated_basalonly_11142024.rds")
+```
 
+## irGSEA Pathway Analysis
+
+### Load annotated cell populations, check metadata
+```{r Import.metadata}
+library(irGSEA)
+
+scRNA_epi_saline <- readRDS("/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds/scRNA_epi_saline_rpca_refined_annotated_442025.rds")
 scRNA_epi_saline@meta.data
+
+scRNA_epi_saline_basal <- readRDS("/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds/scRNA_epi_saline_rpca_refined_annotated_basalonly_11142024.rds")
 scRNA_epi_saline_basal@meta.data
 ```
 
-## Session information
+### Plot annotated umap
+```{r plot UMAP}
+# plot
+DimPlot(scRNA_epi_saline_basal, reduction = "umap",
+        group.by = "CellType",label = T) + NoLegend() 
+```
+
+### Hallmark Pathway Enrichment of Genes Expressed in a Cluster
+```{r Calculate enrichment scores}
+scRNA_epi_saline_basal <- irGSEA.score(object = scRNA_epi_saline_basal, assay = "RNA", 
+                             slot = "data", seeds = 123, ncores = 1,
+                             min.cells = 3, min.feature = 0,
+                             custom = F, geneset = NULL, msigdb = T, 
+                             species = "mouse", category = "H",  
+                             subcategory = NULL, geneid = "symbol",
+                             method = c("AUCell", "UCell", "singscore", 
+                                        "ssgsea", "JASMINE", "viper"),
+                             aucell.MaxRank = NULL, ucell.MaxRank = NULL, 
+                             kcdf = 'Gaussian')
+```
+
+### Integrate differential gene set
+```{r Integrate DE set}
+Seurat::Assays(scRNA_epi_saline_basal)
+result.epi.dge <- irGSEA.integrate(object = scRNA_epi_saline_basal, 
+                               group.by = "CellType",
+                               metadata = NULL, col.name = NULL,
+                               method = c("AUCell","UCell","singscore",
+                                          "ssgsea", "JASMINE", "viper"))
+```
+
+### Heatmap plot
+```{r heatmap plot}
+name <- "epi_basal"
+setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
+tiff("_irGSEA.heatmap.plot.tiff",units="in", width=10, height=15, res=300)
+irGSEA.heatmap.epi.plot <- irGSEA.heatmap(object = result.epi.dge, 
+                                      method = "RRA",
+                                      top = 50, 
+                                      show.geneset = NULL)
+dev.off()
+irGSEA.heatmap.epi.plot
+```
+
+### Bubble.bar plots
+```{r Bubble.bar plots}
+#Epi
+irGSEA.bubble.epi.plot <- irGSEA.bubble(object = result.epi.dge, 
+                                    method = "RRA", 
+                                    top = 50)
+setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
+tiff("_irGSEA.bubble.plot.tiff",units="in", width=8, height=15, res=300)
+irGSEA.bubble.epi.plot
+dev.off()
+
+irGSEA.bubble.epi.plot
+
+irGSEA.barplot.epi.plot <- irGSEA.barplot(object = result.epi.dge,
+                                      method = c("AUCell", "UCell", "singscore",
+                                                 "ssgsea", "JASMINE", "viper", "RRA"))
+pdf(paste(name,"_irGSEA.barplot.plot.pdf",sep=""))
+irGSEA.barplot.epi.plot
+dev.off()
+irGSEA.barplot.epi.plot
+```
+
+### UCell Density & halfvlnplots
+```{r hallmark pathway plots}
+#Epi
+Idents(scRNA_epi_saline_basal) <- "CellType"
+##HALLMARK-INFLAMMATORY-RESPONSE
+name <- "epi"
+scatterplot.epi.hallmark.inflammatory <- irGSEA.density.scatterplot(object = scRNA_epi_saline_basal,
+                             method = "UCell",
+                             show.geneset = "HALLMARK-INFLAMMATORY-RESPONSE",
+                             reduction = "umap")
+scatterplot.epi.hallmark.inflammatory
+halfvlnplot.epi.hallmark.inflammatory <- irGSEA.halfvlnplot(object = scRNA_epi_saline_basal,
+                                  method = "UCell",
+                                  show.geneset = "HALLMARK-INFLAMMATORY-RESPONSE")
+halfvlnplot.epi.hallmark.inflammatory
+##HALLMARK-INTERFERON-ALPHA-RESPONSE
+scatterplot.epi.hallmark.inter.a.response <- irGSEA.density.scatterplot(object = scRNA_epi_saline_basal,
+                             method = "UCell",
+                             show.geneset = "HALLMARK-INTERFERON-ALPHA-RESPONSE",
+                             reduction = "umap")
+scatterplot.epi.hallmark.inter.a.response
+scatterplot.epi.hallmark.inter.a.response <- irGSEA.halfvlnplot(object = scRNA_epi_saline_basal,
+                                  method = "UCell",
+                                  show.geneset = "HALLMARK-INTERFERON-ALPHA-RESPONSE")
+scatterplot.epi.hallmark.inter.a.response
+##HALLMARK-IL6-JAK-STAT3-SIGNALING
+scatterplot.epi.hallmark.IL6.jak.stat3 <- irGSEA.density.scatterplot(object = scRNA_epi_saline_basal,
+                             method = "UCell",
+                             show.geneset = "HALLMARK-IL6-JAK-STAT3-SIGNALING",
+                             reduction = "umap")
+scatterplot.epi.hallmark.IL6.jak.stat3
+halfvlnplot.epi.hallmark.IL6.jak.stat3 <- irGSEA.halfvlnplot(object = scRNA_epi_saline_basal,
+                                  method = "UCell",
+                                  show.geneset = "HALLMARK-IL6-JAK-STAT3-SIGNALING")
+halfvlnplot.epi.hallmark.IL6.jak.stat3
+##HALLMARK-TNFA-SIGNALING-VIA-NFKB
+scatterplot.epi.hallmark.TNFa.nfkb <- irGSEA.density.scatterplot(object = scRNA_epi_saline_basal,
+                             method = "UCell",
+                             show.geneset = "HALLMARK-TNFA-SIGNALING-VIA-NFKB",
+                             reduction = "umap")
+scatterplot.epi.hallmark.TNFa.nfkb
+halfvlnplot.epi.hallmark.TNFa.nfkb <- irGSEA.halfvlnplot(object = scRNA_epi_saline_basal,
+                                  method = "UCell",
+                                  show.geneset = "HALLMARK-TNFA-SIGNALING-VIA-NFKB")
+halfvlnplot.epi.hallmark.TNFa.nfkb
+##HALLMARK-EPITHELIAL-MESENCHYMAL-TRANSITION
+scatterplot.hallmark.epi_mesen.trans <- irGSEA.density.scatterplot(object = scRNA_epi_saline_basal,
+                             method = "UCell",
+                             show.geneset = "HALLMARK-EPITHELIAL-MESENCHYMAL-TRANSITION",
+                             reduction = "umap")
+scatterplot.hallmark.epi_mesen.trans
+halfvlnplot.hallmark.epi_mesen.trans <- irGSEA.halfvlnplot(object = scRNA_epi_saline_basal,
+                                  method = "UCell",
+                                  show.geneset = "HALLMARK-EPITHELIAL-MESENCHYMAL-TRANSITION")
+halfvlnplot.hallmark.epi_mesen.trans
+##HALLMARK-APOPTOSIS
+scatterplot.hallmark.epi_mesen.trans <- irGSEA.density.scatterplot(object = scRNA_epi_saline_basal,
+                             method = "UCell",
+                             show.geneset = "HALLMARK-APOPTOSIS",
+                             reduction = "umap")
+scatterplot.hallmark.epi_mesen.trans
+halfvlnplot.hallmark.epi_mesen.trans <- irGSEA.halfvlnplot(object = scRNA_epi_saline_basal,
+                                  method = "UCell",
+                                  show.geneset = "HALLMARK-APOPTOSIS")
+halfvlnplot.hallmark.epi_mesen.trans
+```
+
+## Trajectory Analysis_Monocle3
+
+### Load annotated cell populations, check metadata
+```{r Import.metadata}
+library(monocle3)
+library(SeuratWrappers)
+library(patchwork)
+
+scRNA_epi_saline <- readRDS("/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds/scRNA_epi_saline_rpca_refined_annotated_442025.rds")
+scRNA_epi_saline@meta.data
+```
+
+### Plot annotated umap
+```{r plot UMAP}
+Idents(scRNA_epi_saline) <- "seurat_clusters"
+DimPlot(scRNA_epi_saline, reduction = "umap",
+        group.by = "seurat_clusters",label = T) + NoLegend() 
+
+Idents(scRNA_epi_saline) <- "CellType"
+DimPlot(scRNA_epi_saline, reduction = "umap",
+        group.by = "CellType",label = T) + NoLegend() 
+```
+
+### Subset for basal-larynx (iterate this for each basal cell population)
+```{r plot UMAP}
+Idents(scRNA_epi_saline) <- "seurat_clusters"
+scRNA_epi_saline_basal_larynx <- subset(scRNA_epi_saline,idents=c(0,1,16,18,11), invert = TRUE)
+scRNA_epi_saline_basal_larynx.list <- SplitObject(scRNA_epi_saline_basal_larynx,split.by="orig.ident")
+scRNA_epi_saline_basal_larynx.list <- lapply(X = scRNA_epi_saline_basal_larynx.list, 
+                                         FUN = function(x){
+                                           DefaultAssay(x)<- "RNA"
+                                           x <- NormalizeData(x)
+                                           x <- FindVariableFeatures(x,selection.method="vst",nfeatures=3000)
+                                         })
+features <- SelectIntegrationFeatures(object.list = scRNA_epi_saline_basal_larynx.list, nfeatures = 3000)
+scRNA_epi_saline_basal_larynx.anchors <- FindIntegrationAnchors(object.list=scRNA_epi_saline_basal_larynx.list)
+scRNA_epi_saline_basal_larynx <- IntegrateData(anchorset=scRNA_epi_saline_basal_larynx.anchors)
+scRNA_epi_saline_basal_larynx <- ScaleData(scRNA_epi_saline_basal_larynx)
+scRNA_epi_saline_basal_larynx <- RunPCA(scRNA_epi_saline_basal_larynx, verbose = FALSE)
+scRNA_epi_saline_basal_larynx <- FindNeighbors(scRNA_epi_saline_basal_larynx, reduction = "pca", dims = 1:50)
+scRNA_epi_saline_basal_larynx <- FindClusters(scRNA_epi_saline_basal_larynx, resolution = 0.8) 
+scRNA_epi_saline_basal_larynx <- RunUMAP(scRNA_epi_saline_basal_larynx, reduction = "pca", dims = 1:50)
+setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
+tiff("scRNA_epi_UMAP_basal_larynx_trajectory.tiff",units="in", width=10, height=14, res=300)
+DimPlot_scCustom(scRNA_epi_saline_basal_larynx, reduction = "umap",
+        group.by = "CellType",label = F, pt.size=2)
+dev.off()
+DimPlot_scCustom(scRNA_epi_saline_basal_larynx, reduction = "umap",
+        group.by = "CellType",label = F)
+
+setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds')
+saveRDS(scRNA_epi_saline_basal_larynx, file = "scRNA_epi_basal_larynx_trajectory_442025.rds")
+```
+
+### Converting Sobj to celldataset object for Monocle3
+```{r Get cell metadata}
+scRNA_epi_saline_basal_larynx <- readRDS("/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/rds/scRNA_epi_basal_larynx_trajectory_442025.rds")
+
+DefaultAssay(scRNA_epi_saline_basal_larynx) <- "RNA" # Must set to RNA assay before cds conversion
+cds <- as.cell_data_set(scRNA_epi_saline_basal_larynx)
+head(colData(cds))
+fData(cds)
+rownames(fData(cds))[1:10]
+fData(cds)$gene_short_name <- rownames(fData(cds))
+head(fData(cds))
+head(counts(cds))
+```
+
+### Retrieve clustering information from seurat object
+```{r Setting up Seurat object for Monocle3 analysis}
+#Assign partitions
+recreate.partitions <- c(rep(1, length(cds@colData@rownames)))
+names(recreate.partitions) <- cds@colData@rownames
+recreate.partitions <- as.factor(recreate.partitions)
+recreate.partitions
+
+cds@clusters@listData[["UMAP"]][["partitions"]] <- recreate.partitions
+
+#Assign cluster info
+list.cluster <- scRNA_epi_saline_basal_larynx@active.ident
+cds@clusters@listData[["UMAP"]][["clusters"]] <- list.cluster
+
+#Assign UMAP coordinates
+cds@int_colData@listData[["reducedDims"]]@listData[["UMAP"]] <- scRNA_epi_saline_basal_larynx@reductions$umap@cell.embeddings
+```
+
+### Plot & Learn Trajectory
+```{r }
+setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
+
+cluster.before.traj <-plot_cells(cds, color_cells_by = "cluster", label_groups_by_cluster = F, 
+           group_label_size = 5) + theme(legend.position = "right")
+
+cluster.before.traj
+
+# Learn trajectory
+cds <- learn_graph(cds, use_partition = T)
+
+# print
+name <- "epi-saline_basal-larynx_trajectory"
+pdf(paste(name,"_scRNA_all_basal-larynx.pdf",sep=""))
+plot_cells(cds,
+           color_cells_by = "cluster",
+           label_groups_by_cluster=FALSE,
+           label_branch_points = FALSE,
+           label_leaves=FALSE,
+           label_roots = F,
+           group_label_size = 7)
+dev.off()
+# plot
+plot_cells(cds,
+           color_cells_by = "cluster",
+           label_groups_by_cluster=FALSE,
+           label_branch_points = FALSE,
+           label_leaves=FALSE,
+           label_roots = FALSE,
+           group_label_size = 7)
+```
+
+### Order cells in Pseudotime
+```{r}
+setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
+
+# Choose origin celltype
+cds <- order_cells(cds)
+
+name <- "epi-saline_basal-larynx_trajectory"
+pdf(paste(name,"_scRNA_basal-larynx.pdf",sep=""))
+plot_cells(cds,
+           color_cells_by = "pseudotime",
+           group_cells_by = "cluster",
+           label_cell_groups = FALSE,
+           label_groups_by_cluster=FALSE,
+           label_leaves=F,
+           label_branch_points=FALSE,
+           label_roots = FALSE,
+           cell_size = 0.6,
+           trajectory_graph_color = "grey60")
+dev.off()
+```
+
+### Barplot_cells ordered by Pseudotime
+```{r}
+setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
+
+head(pseudotime(cds), 10)
+
+cds$monocle3_pseudotime <- pseudotime(cds)
+data.pseudo <- as.data.frame(colData(cds))
+
+# print
+tiff("_data.pseudo_basal_larynx.tiff",units="in", width=12, height=7, res=300)
+ggplot(data.pseudo, aes(monocle3_pseudotime, reorder(CellType, monocle3_pseudotime), fill = CellType)) + geom_boxplot()
+dev.off()
+
+# plot
+ggplot(data.pseudo, aes(monocle3_pseudotime, reorder(CellType, monocle3_pseudotime), fill = CellType)) + geom_boxplot()
+```
+
+### Find genes that change as a function of pseudotime
+```{r plot}
+setwd('/Users/alexanderfoote/dev/Projs/R/Upper_Airway_Coding_Project/plots')
+
+scRNA_epi_saline_basal_larynx$pseudotime <- pseudotime(cds)
+FeaturePlot(scRNA_epi_saline_basal_larynx, features = "pseudotime")
+
+deg_knn <- graph_test(cds, neighbor_graph = "knn", cores = 8)
+deg_knn %>% arrange(q_value) %>% dplyr::filter(status == "OK") %>% head()
+pr_deg_ids <- row.names(subset(deg_knn, q_value < 0.05)) 
+pr_deg_ids
+
+Idents(scRNA_epi_saline_basal_larynx) <- "CellType"
+tiff("_ridgeplot_clubs.tiff",units="in", width=12, height=7, res=300)
+RidgePlot(scRNA_epi_saline_basal_larynx, features = c("Scgb1a1","Scgb3a2","Scgb3a1"), sort = T, idents = c("Club-proximal", "Club-mid", "Club-distal"))
+dev.off()
+
+my_genes <- row.names(subset(fData(cds), gene_short_name %in% c("Scgb1a1","Scgb3a2","Scgb3a1"))) 
+cds_subset <- cds[my_genes,]
+plot_genes_in_pseudotime(cds_subset, color_cells_by = "monocle3_pseudotime" )
+```
+
+#### Session information
 ```{r}
 sessionInfo()
 ```
