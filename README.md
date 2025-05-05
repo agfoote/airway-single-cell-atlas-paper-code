@@ -41,11 +41,7 @@ https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE287495
   - Count cells by `Condition × CellType`  
   - Calculate percent of cells expressing each marker  
 
-- **Basal Cell Subpopulation Analysis**  
-  - Subset “Basal” clusters  
-  - DE analysis of basal subpopulations via `FindAllMarkers()`
-    
-- **Club Cell Subpopulation Analysis**  
+- **Basal & Club Cell Subpopulation Analysis**  
   - Subset “Basal” clusters  
   - DE analysis of basal subpopulations via `FindAllMarkers()`
  
