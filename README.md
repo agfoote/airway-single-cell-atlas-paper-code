@@ -1,5 +1,5 @@
 # A Single-Cell Atlas of the Upper Respiratory Epithelium Reveals Heterogeneity in Cell Types and Patterning Strategies – _iScience_  
-This source code enables the recreation of the results from our iScience 2025 paper ["Cellular heterogeneity and patterning strategies as revealed by upper respiratory epithelium single cell atlas"] [https://www.cell.com/iscience/fulltext/S2589-0042(25)01106-X?_returnURL=https%3A%2F%2Flinkinghub.elsevier.com%2Fretrieve%2Fpii%2FS258900422501106X%3Fshowall%3Dtrue].
+This source code enables the recreation of the results from our iScience 2025 paper ["Cellular heterogeneity and patterning strategies as revealed by upper respiratory epithelium single cell atlas"](https://www.cell.com/iscience/fulltext/S2589-0042(25)01106-X?_returnURL=https%3A%2F%2Flinkinghub.elsevier.com%2Fretrieve%2Fpii%2FS258900422501106X%3Fshowall%3Dtrue).
 
 ## For raw data, please visit our GEO record **GSE287495** at:  
 https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE287495
